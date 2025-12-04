@@ -24,5 +24,37 @@ leituras_merge_df = pd.merge(
     suffixes= ('_Setembro', '_Outubro')
 )
 
+print(leituras_merge_df.head())
+print(f"\nNúmero total de lotes com ambas as leituras: {len(leituras_merge_df)}")
+
+leituras_merge_df['Consumo_Bruto'] = leituras_merge_df['Leitura_Outubro'] - leituras_merge_df['Leitura_Setembro']
+
+print("/n -- Data frame do consumo bruto --")
+print(leituras_merge_df.head())
+
+sete = 'Leitura_Setembro'
+out = 'Leitura_Outubro'
+bruto = 'Consumo_Bruto'
+
+def analisa_status(linha) :
+
+    val_set = linha[sete]
+    val_out = linha[out]
+    val_bruto = linha[bruto]
+
+    if val_bruto < 0:
+        return 'Consumo negativo/Invertido'
+    
+    elif val_bruto > 500:
+        return 'Consumo excessivo'
+    
+    elif val_set < 0 or val_out < 0:
+        return 'Leitura Invalida'
+    
+    else: 
+        return 'OK'
+
+leituras_merge_df['Status'] = leituras_merge_df.apply(analisa_status, axis=1)
+
 print(leituras_merge_df)
 
