@@ -58,3 +58,17 @@ leituras_merge_df['Status'] = leituras_merge_df.apply(analisa_status, axis=1)
 
 print(leituras_merge_df)
 
+def corrigi_erros(linha):
+    
+    erros = ['Consumo negativo/Invertido', 'Leitura Invalida']
+
+    if linha['Status'] in erros:
+        return 0
+    else:
+        return linha[out]
+    
+leituras_merge_df [out] = leituras_merge_df.apply(corrigi_erros, axis=1)
+
+print(leituras_merge_df)
+
+
