@@ -1,7 +1,8 @@
 import pandas as pd
-import matplotlib as mp
+import matplotlib.pyplot as plt
 import numpy as np
 
+# carregando os arquivos enviados no SIGAA
 try:
     df1 = pd.read_csv("files/Moradores.csv")
     df2 = pd.read_csv("files/leitura_setembro.csv")
@@ -15,10 +16,23 @@ moradores_df = pd.DataFrame(df1)
 leituras_setembro_df = pd.DataFrame(df2)
 leituras_outubro_df = pd.DataFrame(df3)
 
-# Tratamento das linhas vazias de cada uma das df's 
-leituras_setembro_df['Lote'] = leituras_setembro_df['Lote'].str.strip('-')
-leituras_outubro_df['Lote'] = leituras_outubro_df['Lote'].str.strip('-')
-moradores_df['Lote'] = moradores_df['Lote'].str.strip('-')
+# Lista de DataFrames para aplicar as operações
+dfs_para_limpar = [leituras_setembro_df, leituras_outubro_df, moradores_df]
+
+for df in dfs_para_limpar:
+    # Limpa espaços em branco no início e fim (Obrigatório para merges)
+    df['Lote'] = df['Lote'].str.strip()
+    
+    # Use replace com regex=False para hífens
+    df['Lote'] = df['Lote'].str.replace('-', '', regex=False) 
+    
+    # Se houver outros caracteres, como espaços internos (ex: 'A 01'), remova-os:
+    df['Lote'] = df['Lote'].str.replace(' ', '', regex=False)
+    
+    # Padroniza para Maiúsculas (Garante que 'a01' e 'A01' sejam iguais)
+    df['Lote'] = df['Lote'].str.upper()
+
+print("Colunas 'Lote' limpas e padronizadas com sucesso.")
 
 # Mistura os 3 df's de acordo com a coluna de coincidência delas (Lote)
 leituras_merge_df = pd.merge(
@@ -147,6 +161,7 @@ consumo_valido_df['Faixa'] = pd.cut(
     include_lowest=True
 )
 
+
 analise_faixas = consumo_valido_df.groupby('Faixa').agg(
     Lotes_Contagem=('Lote', 'count'),
     Soma_Consumo=('Consumo Ajustado', 'sum')
@@ -158,5 +173,71 @@ total_consumo_ok = analise_faixas['Soma_Consumo'].sum()
 analise_faixas['% Lotes'] = (analise_faixas['Lotes_Contagem'] / total_lotes_ok) * 100
 analise_faixas['% Consumo'] = (analise_faixas['Soma_Consumo'] / total_consumo_ok) * 100
 
+# 🚨 DEFINIÇÃO DO LIMITE DE AGRUPAMENTO
+LIMITE_AGRUPAMENTO = 3.0 # Agrupar faixas menores que 3% do total de lotes OK
+
+# Assumindo que o DataFrame 'analise_faixas' foi calculado corretamente antes:
+# total_lotes_ok = analise_faixas['Lotes_Contagem'].sum()
+
+# 1. Aplicar o agrupamento 'Outros'
+analise_faixas['Faixa_Agrupada'] = np.where(
+    analise_faixas['% Lotes'] < LIMITE_AGRUPAMENTO,
+    'Outros',
+    analise_faixas['Faixa']
+)
+
+# 2. Agrupar novamente pelos novos rótulos
+analise_agrupada = analise_faixas.groupby('Faixa_Agrupada').agg(
+    Contagem_Final=('Lotes_Contagem', 'sum'),
+    Soma_Consumo_Final=('Soma_Consumo', 'sum')
+).reset_index()
+
+# 3. Recalcular os Percentuais Finais
+analise_agrupada['% Lotes Final'] = (analise_agrupada['Contagem_Final'] / total_lotes_ok) * 100
+analise_agrupada['% Consumo Final'] = (analise_agrupada['Soma_Consumo_Final'] / total_consumo_ok) * 100
+
+print("\n--- 📈 Análise de Consumo por Faixa (Agrupada) ---")
+print(analise_agrupada.to_markdown(index=False, floatfmt=".2f"))
+
 print("\n--- 📈 Análise de Consumo por Faixa ---")
 print(analise_faixas.to_markdown(index=False, floatfmt=".2f"))
+
+if 'analise_faixas' in locals() and not analise_faixas.empty:
+    
+    faixas = analise_faixas['Faixa']
+
+        # ----------------------------------------------------
+    ### 1. Gráfico de Pizza: Percentual de Lotes por Faixa (Agrupado)
+    # ----------------------------------------------------
+
+    plt.figure(figsize=(10, 7))
+    plt.pie(
+        analise_agrupada['% Lotes Final'], 
+        labels=analise_agrupada['Faixa_Agrupada'], 
+        autopct='%1.1f%%', 
+        startangle=90, 
+        wedgeprops={'edgecolor': 'black'}
+    )
+    plt.title(f'Distribuição de Lotes por Faixa de Consumo (Limiar: < {LIMITE_AGRUPAMENTO}%)', fontsize=14)
+    plt.axis('equal') 
+    plt.show() 
+
+
+    # ----------------------------------------------------
+    ### 2. Gráfico de Pizza: Percentual de Consumo por Faixa (Agrupado)
+    # ----------------------------------------------------
+
+    plt.figure(figsize=(10, 7))
+    plt.pie(
+        analise_agrupada['% Consumo Final'], 
+        labels=analise_agrupada['Faixa_Agrupada'], 
+        autopct='%1.1f%%', 
+        startangle=90, 
+        wedgeprops={'edgecolor': 'black'}
+    )
+    plt.title(f'Distribuição do Consumo Total por Faixa (Limiar: < {LIMITE_AGRUPAMENTO}%)', fontsize=14)
+    plt.axis('equal') 
+    plt.show()
+
+else:
+    print("O DataFrame 'analise_faixas' não foi encontrado ou está vazio. Recalcule a análise de faixas.")
